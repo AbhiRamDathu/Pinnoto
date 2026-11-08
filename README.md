@@ -1,237 +1,280 @@
-# ProofRun
+# PINNOTO
+### Containment-First AI Execution Platform
 
-**Verifiable, sandboxed execution for AI agents.**
+**AI should propose. Policies should authorize. Sandboxes should execute. Evidence should prove.**
 
-ProofRun is a FastAPI-based execution and evidence-verification service designed to help AI agents perform controlled work and produce cryptographically verifiable results.
+PINNOTO is an AI-assisted execution platform built for the **Vultr Agent Rush Hackathon — Challenge 1: Blast Radius Zero**.
 
-The project combines Docker-based execution isolation, SHA-256 output integrity checks, Ed25519 digital signatures, trusted-key verification, and automated tests.
+AI agents can propose actions, but executing unsafe commands, accessing unauthorized resources, or making unexpected changes can create serious security risks. PINNOTO addresses this problem by combining AI planning, deterministic authorization, human approval, isolated Docker execution, and cryptographically verifiable evidence.
 
-> **Project status:** Active development. The latest reported full test-suite checkpoint is **87 passed in 5.39 seconds**. This verifies the reported automated tests, not production readiness or a complete security audit.
+## Live Application
 
-## Current capabilities
+- **Application:** http://45.76.111.249:8080/
+- **GitHub:** https://github.com/AbhiRamDathu/Pinnoto
+- **Backend:** FastAPI running on Vultr Cloud Compute.
+- **Inference:** Vultr Serverless Inference.
+- **Deployment:** Vultr VM with Docker and Nginx.
 
-- FastAPI execution API with request validation and health checks.
-- Predefined Docker smoke-test execution through the execution API.
-- Bounded Python execution through the `CodeRunner` component, with code-size and output-size limits.
-- Docker execution configuration requesting network isolation, read-only root filesystems, dropped Linux capabilities, non-root execution, and CPU, memory, and PID limits.
-- Execution timeout handling and container cleanup.
-- SHA-256 output-integrity verification.
-- Ed25519 signatures for execution evidence.
-- Verification against a trusted public key.
-- Detection of tampered output, altered metadata, invalid signatures, and untrusted signing keys, as covered by the existing tests.
-- Persistent execution records and API workflows, subject to the existing storage and verification rules.
-- Automated regression tests for execution, evidence verification, API behavior, storage, and sandbox configuration.
+## 1. How PINNOTO Works
 
-**Integration boundary:** The existence of the bounded Python runner does not, by itself, establish that arbitrary Python execution is exposed through the public API or connected to an AI planning agent. That end-to-end integration must be verified separately.
+PINNOTO transforms an AI-generated plan into a controlled execution workflow.
 
-## Architecture
+1. **Task submission:** The user submits a task through the web application.
+2. **AI planning:** Vultr Serverless Inference generates a bounded execution plan.
+3. **Policy validation:** Deterministic authorization checks validate the proposed actions.
+4. **Human approval:** The user explicitly approves the proposed plan.
+5. **Sandbox execution:** Approved operations execute inside Docker containers.
+6. **Evidence generation:** SHA-256 hashes and Ed25519 signatures establish evidence integrity.
+7. **Independent verification:** Evidence is checked against a trusted public key.
+8. **Persistence:** Execution records are stored in SQLite for inspection and auditing.
 
-The intended execution workflow is:
+Execution is not started merely because the model proposes a plan.
 
-1. **Request validation** — Validate the incoming task and its permitted operation.
-2. **Authorization** — Apply the execution policy before allowing work to run.
-3. **Sandbox execution** — Run the approved task inside a restricted Docker container.
-4. **Result collection** — Collect the exit status and bounded execution output.
-5. **Evidence generation** — Hash the output and create signed execution evidence.
-6. **Independent verification** — Validate the evidence against a trusted public key and the expected execution metadata.
-7. **Persistence** — Store records only when the applicable verification and storage requirements are satisfied.
+## 2. Vultr Infrastructure and Integration
 
-The complete workflow should be verified through integration tests before being described as fully operational.
+Vultr is the central infrastructure powering PINNOTO.
 
-## Technology stack
+### Vultr Cloud Compute
 
-- Python 3.12
-- FastAPI
-- Uvicorn
-- Docker Engine
-- Docker SDK for Python
-- Pydantic
-- `cryptography`
-- `pytest`
-- `httpx` for HTTP-based API tests, if confirmed by the project's dependency files
+A Vultr Cloud Compute VM hosts the application backend and Docker execution infrastructure.
 
-## Prerequisites
+The VM runs:
+- FastAPI backend.
+- Docker Engine.
+- Execution orchestration.
+- Persistent SQLite storage.
+- Application networking.
 
-- Python 3.12
-- Docker Desktop on Windows or a compatible Docker Engine
-- A running Docker daemon accessible to the Python Docker SDK
-- PowerShell on Windows or an equivalent terminal
+### Vultr Serverless Inference
 
-Verify Docker availability before testing container execution.
+PINNOTO integrates Vultr Serverless Inference through its OpenAI-compatible inference API.
 
-```powershell
-docker version
-docker info
+**Model:** DeepSeek V4.1 Flash.
+
+Inference powers the AI planning workflow. The application sends task information to the inference service and receives a proposed execution plan for subsequent deterministic validation.
+
+Inference credentials remain in the backend configuration and are not intentionally exposed to the frontend or execution container.
+
+### Web Application Deployment
+
+The frontend is built using React and Vite and served through Nginx.
+
+The backend runs separately in a Docker container. Nginx provides the public web entry point and forwards API requests to the backend over the Docker network.
+
+The public application is accessible through the Vultr VM.
+
+## 3. Architecture
+
+```mermaid
+flowchart TD
+    A[User / Browser] --> B[React Web Application]
+    B --> C[Nginx on Vultr VM]
+    C --> D[FastAPI Backend]
+    D --> E[Vultr Serverless Inference]
+    E --> D
+    D --> F[Deterministic Policy Validation]
+    F --> G[Human Approval]
+    G --> H[Docker Execution Sandbox]
+    H --> I[Execution Output]
+    I --> J[SHA-256 and Ed25519 Evidence]
+    J --> K[Independent Verification]
+    K --> L[SQLite Execution Records]
+    L --> D
+    D --> B
 ```
 
-Both commands should succeed against the intended Docker daemon.
+**Infrastructure boundary:** The application and Docker execution infrastructure run on the Vultr VM. Docker containers provide process-level isolation; they are not separate virtual machines. The backend controls Docker through its Docker socket, which is a highly privileged host interface and remains part of the trusted control plane.
 
-## Local setup
+## 4. Security and Containment
 
-From the project root, create and activate a virtual environment:
+PINNOTO uses multiple execution restrictions to reduce the potential impact of untrusted workloads.
+
+- Docker container isolation.
+- Disabled container networking.
+- Read-only root filesystem.
+- Dropped Linux capabilities.
+- Non-root container execution.
+- CPU, memory and process-count limits.
+- Execution timeouts.
+- Bounded execution output.
+- Container cleanup after execution.
+
+These restrictions are designed to limit execution capabilities and prevent unauthorized operations from affecting the host.
+
+They reduce attack surface but do not establish immunity against every container escape or host compromise.
+
+## 5. Cryptographically Verifiable Evidence
+
+Every successful execution can produce an evidence record containing:
+
+- Execution ID and timestamp.
+- Container image and execution status.
+- Exit code.
+- SHA-256 output hash.
+- Ed25519 signature.
+- Trusted public-key verification result.
+
+SHA-256 provides output integrity checking.
+
+Ed25519 provides cryptographic authentication of signed evidence.
+
+Independent verification checks the evidence against the configured trusted public key rather than accepting an arbitrary key supplied by the evidence itself.
+
+Verified records are persisted in SQLite.
+
+## 6. Real Execution Demonstration
+
+The deployed application has successfully completed a real predefined Docker smoke test.
+
+**Verified execution result:**
+
+- Output: `PROOFRUN_SMOKE_OK`
+- Exit code: `0`
+- Container image: `alpine:3.22`
+- Image pinned by SHA-256 digest.
+- Evidence hash algorithm: SHA-256.
+- Signature algorithm: Ed25519.
+- Verification backend: Verified.
+
+This demonstrates an actual execution and evidence-verification workflow rather than a simulated success response.
+
+The application also provides a predefined containment-test workflow. Individual adversarial containment results should be reported only after their execution and verification.
+
+## 7. Technology Stack
+
+| Component | Technology |
+|---|---|
+| Cloud infrastructure | Vultr Cloud Compute |
+| AI inference | Vultr Serverless Inference |
+| AI model | DeepSeek V4.1 Flash |
+| Backend | Python 3.12, FastAPI |
+| Validation | Pydantic |
+| Frontend | React 19, JavaScript |
+| Frontend tooling | Vite |
+| Web server | Nginx |
+| Execution isolation | Docker Engine |
+| Persistence | SQLite |
+| Integrity | SHA-256 |
+| Digital signatures | Ed25519 |
+| Testing | Pytest |
+| API testing | HTTPX |
+
+## 8. Automated Testing
+
+PINNOTO has reached the following reported automated test checkpoint:
+
+**123 tests passed.**
+
+The test coverage includes execution workflows, API behavior, authorization, storage, Docker configuration, security middleware, and evidence verification.
+
+Run the test suite locally:
+
+```powershell
+python -m pytest -q
+```
+
+A passing automated test suite does not independently establish production readiness or guarantee that all security restrictions resist real-world attacks.
+
+## 9. API Endpoints
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| GET | `/health` | Backend health |
+| GET | `/api/health/docker` | Docker availability |
+| POST | `/api/agent/plan` | Generate execution plan |
+| POST | `/api/execution/run` | Execute predefined smoke test |
+| GET | `/api/execution/` | Retrieve execution history |
+
+Interactive API documentation is available at:
+
+`http://45.76.111.249:8080/docs`
+
+## 10. Local Development
+
+### Prerequisites
+
+- Python 3.12
+- Docker Engine or Docker Desktop
+- Git
+- PowerShell or an equivalent terminal
+
+### Clone the repository
+
+```powershell
+git clone https://github.com/AbhiRamDathu/Pinnoto.git
+cd Pinnoto
+```
+
+### Create a virtual environment
 
 ```powershell
 python -m venv .venv
-.\.venv\Scripts\Activate.ps1
+.venv\Scripts\Activate.ps1
+```
+
+### Install dependencies
+
+```powershell
 python -m pip install -r requirements.txt
 ```
 
-If using the pinned dependency file:
+### Configure environment
 
-```powershell
-python -m pip install -r requirements-lock.txt
-```
+Configure the required Vultr inference credentials and application settings using environment variables.
 
-### Reproducible dependencies
+Never commit `.env` files, private signing keys, inference API keys, or other credentials.
 
-- `requirements.txt` defines the project's direct dependencies.
-- `requirements-lock.txt` is intended to capture pinned dependency versions.
-- The latest reported test checkpoint was run in the `.venv-lockcheck` environment.
-
-A passing test suite in an existing virtual environment does not independently prove that installation succeeds from scratch. Validate the lock file in a fresh environment before claiming clean-install reproducibility.
-
-## Configuration and signing keys
-
-Configure the Ed25519 private signing key using the application's expected configuration mechanism.
-
-If the application uses a local `.env` file, the expected setting is:
-
-```text
-PROOFRUN_ED25519_PRIVATE_KEY=<BASE64_ENCODED_PRIVATE_KEY>
-```
-
-The value must match the encoding and key format expected by the implementation.
-
-**Never commit `.env` files, private keys, API credentials, or other secrets.**
-
-The verifier must trust a public key obtained through a trusted configuration channel. It must not trust a public key merely because the evidence payload supplies it.
-
-If the trusted public key is currently hardcoded in `app/core/evidence.py`, ensure that the configured private key corresponds to that public key. Production key provisioning, rotation, and access control require additional operational safeguards.
-
-## Run the tests
-
-Activate the intended virtual environment and run the complete suite:
-
-```powershell
-.\.venv-lockcheck\Scripts\python.exe -m pytest -q
-```
-
-To run the focused execution and evidence tests:
-
-```powershell
-.\.venv-lockcheck\Scripts\python.exe -m pytest tests\test_code_runner.py -q
-.\.venv-lockcheck\Scripts\python.exe -m pytest tests\test_execution_api.py tests\test_execution_store.py -q
-.\.venv-lockcheck\Scripts\python.exe -m pytest tests\test_evidence.py -q
-.\.venv-lockcheck\Scripts\python.exe -m pytest tests\test_docker_runner.py -q
-```
-
-### Latest reported verification checkpoint
-
-| Test group | Result |
-|---|---|
-| CodeRunner unit tests | 6 passed |
-| Full regression suite | 87 passed in 5.39 seconds |
-
-These results were reported from the development environment. Re-run the tests after changes and update this section with the actual results.
-
-## Start the API
-
-From the project root, with the virtual environment activated:
+### Run the backend
 
 ```powershell
 python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
-Interactive API documentation:
+### Run tests
 
-<http://127.0.0.1:8000/docs>
-
-Health endpoint:
-
-```http
-GET /health
+```powershell
+python -m pytest -q
 ```
 
-Check the actual route definitions in the running application if an endpoint differs from this documentation.
+Docker must be accessible to the backend for real container execution.
 
-## Execution smoke test
+## 11. Security Limitations
 
-The execution API supports the predefined `smoke_test` command, according to the current API contract.
+PINNOTO is an actively developed hackathon prototype.
 
-Submit a request to:
+Important boundaries:
 
-```http
-POST /api/execution/run
-Content-Type: application/json
-```
+- Docker socket access is highly privileged.
+- Container isolation does not guarantee protection against every kernel or runtime vulnerability.
+- A valid signature proves the authenticity of signed data, not the truth of every execution claim.
+- The public execution API supports its explicitly authorized operations; internal Python runner functionality should not be confused with unrestricted public code execution.
+- Production deployments require additional authentication, HTTPS, rate limiting, monitoring, secret management, and operational hardening.
 
-Request body:
+## 12. Challenge 1 Alignment
 
-```json
-{
-  "command": "smoke_test"
-}
-```
+PINNOTO addresses the central objective of **Blast Radius Zero**:
 
-A successful response is expected to include execution results and evidence, according to the endpoint's response model.
+- Real AI-assisted task planning.
+- Vultr-powered inference.
+- Deterministic execution authorization.
+- Explicit human approval.
+- Isolated Docker execution on Vultr.
+- Resource and network restrictions.
+- Cryptographically verifiable execution evidence.
+- Persistent execution records.
 
-The public API's supported commands must be distinguished from the internal `CodeRunner` capability. Do not assume that arbitrary Python source code can be submitted through the public API unless the route and authorization logic explicitly support it.
+Our objective is to make agent execution controlled, auditable, and independently verifiable.
 
-## Security model and limitations
+## 13. Project Information
 
-ProofRun requests several container-level security controls:
+**Project:** PINNOTO  
+**Hackathon:** Vultr Agent Rush Hackathon  
+**Challenge:** Challenge 1 — Blast Radius Zero  
+**Repository:** https://github.com/AbhiRamDathu/Pinnoto  
+**Live Application:** http://45.76.111.249:8080/
 
-- Network isolation.
-- Read-only root filesystem.
-- Dropped Linux capabilities.
-- Non-root container execution.
-- CPU, memory, and process-count limits.
-- Bounded code input and captured output in the Python runner.
-- Execution timeout handling and container cleanup.
+**Demo video:** To be added after recording.
 
-These controls reduce the available attack surface but do not establish that the sandbox is immune to escape or denial-of-service attacks.
+---
 
-### Evidence integrity
-
-- **SHA-256** detects changes to the hashed output.
-- **Ed25519** authenticates evidence signed by the corresponding private key.
-- **Trusted-key verification** helps prevent acceptance of evidence signed by an untrusted key.
-- **Metadata validation** checks that the signed information matches the expected execution record.
-
-A valid signature proves that the signed payload was signed by the corresponding private key. It does not, by itself, prove that the reported task actually executed correctly or that the execution environment was uncompromised.
-
-### Validation still required
-
-Before making stronger security claims, validate:
-
-- Real Docker execution and cleanup, including timeout and daemon-failure scenarios.
-- Network isolation and resource limits in a running container.
-- Rejection of unauthorized or malformed execution requests.
-- Independent evidence verification and persistence behavior.
-- End-to-end integration between planning, authorization, execution, and evidence.
-- Deployment configuration, authentication, rate limiting, monitoring, and secret management.
-
-Unit tests that inspect Docker SDK arguments are useful, but they do not independently prove that every restriction is enforced by the runtime.
-
-## Project status and roadmap
-
-ProofRun is under active development.
-
-The next priorities are:
-
-1. Validate sandbox behavior using real-container integration tests.
-2. Verify the end-to-end execution and evidence pipeline.
-3. Confirm that planning and execution are connected through explicit authorization and validation.
-4. Validate reproducible installation and deployment.
-5. Integrate Vultr and inference services when credentials, infrastructure access, and hackathon resources are available.
-6. Document measured results and security limitations accurately.
-
-Vultr API integration and production deployment should be considered incomplete until demonstrated and tested.
-
-## Hackathon preparation
-
-Before submission, verify the official challenge requirements, judging criteria, infrastructure rules, reproducibility requirements, and evidence expectations.
-
-Document demonstrated capabilities separately from planned capabilities. Include test commands and actual results, explain the threat model, and provide reproducible instructions for running the project.
-
-**ProofRun's goal is to make agent execution controlled, auditable, and verifiable—not merely to report that a command succeeded.**
+**PINNOTO — Execute. Contain. Verify.**
