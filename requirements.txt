@@ -1,0 +1,9 @@
+﻿fastapi
+uvicorn[standard]
+pydantic
+docker
+httpx
+python-dotenv
+cryptography
+pytest
+httpx2==2.13.1

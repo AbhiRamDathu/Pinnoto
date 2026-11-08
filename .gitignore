@@ -1,0 +1,59 @@
+.venv/
+.venv-clean/
+.venv-clean
+.venv-lockcheck/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.env
+.env.*
+!.env.example
+artifacts/*
+!artifacts/.gitkeep
+uvicorn-debug.log
+*.log
+# Local verification environments
+.venv-*/
+
+# Temporary security and dependency audit reports
+pip-audit-*.json
+
+# Temporary archives and restore copies
+ProofRun-restore-verify-*/
+ProofRun-*.zip
+
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+
+# Databases and execution records
+*.db
+*.sqlite
+*.sqlite3
+*.sqlite3-*
+
+# Deployment archives
+*.tar
+*.tar.gz
+*.zip
+
+# Local environments
+.venv/
+.venv-*/
+venv/
+__pycache__/
+.pytest_cache/
+
+# Local backups and restore artifacts
+release-backups/
+ProofRun-restore-verify-*/
+*.pre-*
+*.candidate.txt
+
+# Generated local artifacts
+artifacts/*
+!artifacts/.gitkeep
